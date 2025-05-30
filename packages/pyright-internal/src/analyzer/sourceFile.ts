@@ -339,7 +339,10 @@ export class SourceFile {
         this._isTypingStubFile =
             this._isStubFile && (this._uri.pathEndsWith('stdlib/typing.pyi') || fileName === 'typing_extensions.pyi');
         this._isTypingExtensionsStubFile = this._isStubFile && fileName === 'typing_extensions.pyi';
-        this._isTypeshedStubFile = this._isStubFile && this._uri.pathEndsWith('stdlib/_typeshed/__init__.pyi');
+        this._isTypeshedStubFile =
+            this._isStubFile &&
+            (this._uri.pathEndsWith('stdlib/_typeshed/__init__.pyi') ||
+                this._uri.pathEndsWith('stdlib/_typeshed/_type_checker_internals.pyi'));
 
         this._isBuiltInStubFile = false;
         if (this._isStubFile) {
@@ -570,6 +573,15 @@ export class SourceFile {
         try {
             //TODO: this isnt ideal because it re-reads the file for each cell which is unnecessary
             source = getIPythonCells(this.fileSystem, this.getRealUri(), this._console)?.[cellIndex]?.source;
+            // Make sure we don't return any non-python cells
+            if (
+                source &&
+                ['%sql', '%%sql', '%sh', '%pip', '%run', '%fs', '%load', '%matplotlib', '%who', '%env'].includes(
+                    source[0].split(/[\s]/)[0]
+                )
+            ) {
+                return '';
+            }
         } catch (e) {
             this._console.error(e instanceof Error ? e.message : String(e));
         }
@@ -651,6 +663,8 @@ export class SourceFile {
             this._writableData.tokenizerOutput ?? this._tokenizeContents(this._writableData.parsedFileContents);
 
         return {
+            contentHash:
+                this._writableData.lastFileContentHash || StringUtils.hashString(this._writableData.parsedFileContents),
             parserOutput: this._writableData.parserOutput,
             tokenizerOutput,
             text: this._writableData.parsedFileContents,
